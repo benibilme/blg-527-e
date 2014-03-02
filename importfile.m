@@ -1,4 +1,4 @@
-function [id,label] = importfile(filename, startRow, endRow)
+function [idLab, labelStr, labelStrSet, labelStrSetVal] = importfile(filename, startRow, endRow)
 %IMPORTFILE Import numeric data from a text file as column vectors.
 %   [ID,LABEL] = IMPORTFILE(FILENAME) Reads data from text file FILENAME
 %   for the default selection.
@@ -52,6 +52,26 @@ fclose(fileID);
 % script.
 
 %% Allocate imported array to column variable names
-id = dataArray{:, 1};
-label = dataArray{:, 2};
+idLab          = zeros(1, length(dataArray{:,1}));
+labelStr       = dataArray{:, 2}';
+labelStrSet    = unique(labelStr);
+labelStrSetVal = 1:length(labelStrSet);
+
+for i = 1:length(idLab)
+    for j = 1:length(labelStrSet)
+        if strcmp(labelStr{i},labelStrSet{j})
+            idLab(i) = labelStrSetVal(j);
+            break
+        end
+    end
+end
+
+if ~all(logical(idLab))
+    disp ('ERROR: there are images without labes!')
+end
+
+end
+
+
+
 

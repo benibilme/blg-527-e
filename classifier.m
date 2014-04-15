@@ -1,174 +1,83 @@
-function phow_caltech101()
-% PHOW_CALTECH101 Image classification in the Caltech-101 dataset
-%   This program demonstrates how to use VLFeat to construct an image
-%   classifier on the Caltech-101 data. The classifier uses PHOW
-%   features (dense SIFT), spatial histograms of visual words, and a
-%   Chi2 SVM. To speedup computation it uses VLFeat fast dense SIFT,
-%   kd-trees, and homogeneous kernel map. The program also
-%   demonstrates VLFeat PEGASOS SVM solver, although for this small
-%   dataset other solvers such as LIBLINEAR can be more efficient.
-%
-%   By default 15 training images are used, which should result in
-%   about 64% performance (a good performance considering that only a
-%   single feature type is being used).
-%
-%   Call PHOW_CALTECH101 to train and test a classifier on a small
-%   subset of the Caltech-101 data. Note that the program
-%   automatically downloads a copy of the Caltech-101 data from the
-%   Internet if it cannot find a local copy.
-%
-%   Edit the PHOW_CALTECH101 file to change the program configuration.
-%
-%   To run on the entire dataset change CONF.TINYPROBLEM to FALSE.
-%
-%   The Caltech-101 data is saved into CONF.CALDIR, which defaults to
-%   'data/caltech-101'. Change this path to the desired location, for
-%   instance to point to an existing copy of the Caltech-101 data.
-%
-%   The program can also be used to train a model on custom data by
-%   pointing CONF.CALDIR to it. Just create a subdirectory for each
-%   class and put the training images there. Make sure to adjust
-%   CONF.NUMTRAIN accordingly.
-%
-%   Intermediate files are stored in the directory CONF.DATADIR. All
-%   such files begin with the prefix CONF.PREFIX, which can be changed
-%   to test different parameter settings without overriding previous
-%   results.
-%
-%   The program saves the trained model in
-%   <CONF.DATADIR>/<CONF.PREFIX>-model.mat. This model can be used to
-%   test novel images independently of the Caltech data.
-%
-%     load('data/baseline-model.mat') ; # change to the model path
-%     label = model.classify(model, im) ;
-%
+% YAPILACAKLAR
+% TEN FOLD CROSSVALIDATION GORE KOD DUZENELENECEK
+% CLASSIFIER PERFORMANCE PARAMETRELERI CIKARILACAK ROUTINE TAMAMLANACAK
+% 
 
-% Author: Andrea Vedaldi
 
-% Copyright (C) 2011-2013 Andrea Vedaldi
-% All rights reserved.
-%
-% This file is part of the VLFeat library and is made available under
-% the terms of the BSD license (see the COPYING file).
 
-conf.calDir = 'data/caltech-101' ;
-conf.dataDir = 'data/' ;
-conf.autoDownloadData = true ;
-conf.numTrain = 15 ;
-conf.numTest = 15 ;
-conf.numClasses = 102 ;
-conf.numWords = 600 ;
-conf.numSpatialX = [2 4] ;
-conf.numSpatialY = [2 4] ;
-conf.quantizer = 'kdtree' ;
-conf.svm.C = 10 ;
+function classifier()
 
-conf.svm.solver = 'sdca' ;
-%conf.svm.solver = 'sgd' ;
-%conf.svm.solver = 'liblinear' ;
+conf.clobber         = false; 
+conf.trainDataPath   = 'train';
+conf.testDataPath    = 'test';
+conf.vocabFile       = 'vocab.mat';
+conf.histFile        = 'hists.mat';
+conf.modelFile       = 'model.mat';
+conf.resultFile      = 'result' ;
 
-conf.svm.biasMultiplier = 1 ;
-conf.phowOpts = {'Step', 3} ;
-conf.clobber = false ;
-conf.tinyProblem = true ;
-conf.prefix = 'baseline' ;
-conf.randSeed = 1 ;
-
-if conf.tinyProblem
-  conf.prefix = 'tiny' ;
-  conf.numClasses = 5 ;
-  conf.numSpatialX = 2 ;
-  conf.numSpatialY = 2 ;
-  conf.numWords = 300 ;
-  conf.phowOpts = {'Verbose', 2, 'Sizes', 7, 'Step', 5} ;
-end
-
-conf.vocabPath = fullfile(conf.dataDir, [conf.prefix '-vocab.mat']) ;
-conf.histPath = fullfile(conf.dataDir, [conf.prefix '-hists.mat']) ;
-conf.modelPath = fullfile(conf.dataDir, [conf.prefix '-model.mat']) ;
-conf.resultPath = fullfile(conf.dataDir, [conf.prefix '-result']) ;
-
-randn('state',conf.randSeed) ;
-rand('state',conf.randSeed) ;
-vl_twister('state',conf.randSeed) ;
+randn('state', 1) ;
+rand('state', 1) ;
+vl_twister('state', 1) ;
 
 % --------------------------------------------------------------------
-%                                            Download Caltech-101 data
+%  Setup data
 % --------------------------------------------------------------------
 
-if ~exist(conf.calDir, 'dir') || ...
-   (~exist(fullfile(conf.calDir, 'airplanes'),'dir') && ...
-    ~exist(fullfile(conf.calDir, '101_ObjectCategories', 'airplanes')))
-  if ~conf.autoDownloadData
-    error(...
-      ['Caltech-101 data not found. ' ...
-       'Set conf.autoDownloadData=true to download the required data.']) ;
-  end
-  vl_xmkdir(conf.calDir) ;
-  calUrl = ['http://www.vision.caltech.edu/Image_Datasets/' ...
-    'Caltech101/101_ObjectCategories.tar.gz'] ;
-  fprintf('Downloading Caltech-101 data to ''%s''. This will take a while.', conf.calDir) ;
-  untar(calUrl, conf.calDir) ;
-end
+[trainingIds, trainingLabels] =  importfile('trainLabels.csv',2, 1000);
 
-if ~exist(fullfile(conf.calDir, 'airplanes'),'dir')
-  conf.calDir = fullfile(conf.calDir, '101_ObjectCategories') ;
-end
+labels = unique(trainingLabels);
+labelVals = 1:length(labels);
+
+disp('Data setup is completed');
 
 % --------------------------------------------------------------------
-%                                                           Setup data
+%  Setup up model parameters 
 % --------------------------------------------------------------------
-classes = dir(conf.calDir) ;
-classes = classes([classes.isdir]) ;
-classes = {classes(3:conf.numClasses+2).name} ;
 
-images = {} ;
-imageClass = {} ;
-for ci = 1:length(classes)
-  ims = dir(fullfile(conf.calDir, classes{ci}, '*.jpg'))' ;
-  ims = vl_colsubset(ims, conf.numTrain + conf.numTest) ;
-  ims = cellfun(@(x)fullfile(classes{ci},x),{ims.name},'UniformOutput',false) ;
-  images = {images{:}, ims{:}} ;
-  imageClass{end+1} = ci * ones(1,length(ims)) ;
-end
-selTrain = find(mod(0:length(images)-1, conf.numTrain+conf.numTest) < conf.numTrain) ;
-selTest = setdiff(1:length(images), selTrain) ;
-imageClass = cat(2, imageClass{:}) ;
-
-model.classes = classes ;
-model.phowOpts = conf.phowOpts ;
-model.numSpatialX = conf.numSpatialX ;
-model.numSpatialY = conf.numSpatialY ;
-model.quantizer = conf.quantizer ;
+%%CLASSES için bir şey yapılacak
+model.numWords = 600;
+model.phowOpts = {'Step', 3};
+model.numSpatialX = [2 4];
+model.numSpatialY = [2 4];
+model.quantizer = 'kdtree';
 model.vocab = [] ;
 model.w = [] ;
 model.b = [] ;
+model.svm.C = 10 ;
+model.svm.solver = 'sdca' ;
+%model.svm.solver = 'sgd' ;
+%model.svm.solver = 'liblinear' ;
+model.svm.biasMultiplier = 1 ;
+model.classes  = labels;
 model.classify = @classify ;
+
+disp('Model setup is completed');
+
+
+
 
 % --------------------------------------------------------------------
 %                                                     Train vocabulary
 % --------------------------------------------------------------------
 
-if ~exist(conf.vocabPath) || conf.clobber
+if ~exist(conf.vocabFile) || conf.clobber 
 
-  % Get some PHOW descriptors to train the dictionary
-  selTrainFeats = vl_colsubset(selTrain, 30) ;
   descrs = {} ;
-  %for ii = 1:length(selTrainFeats)
-  parfor ii = 1:length(selTrainFeats)
-    im = imread(fullfile(conf.calDir, images{selTrainFeats(ii)})) ;
+  parfor i=1:length(trainingIds)
+    imageFilePath = fullfile(conf.trainDataPath, sprintf('%d.png', i));
+    im = imread(imageFilePath) ;
     im = standarizeImage(im) ;
-    [drop, descrs{ii}] = vl_phow(im, model.phowOpts{:}) ;
+    [drop, descrs{i}] = vl_phow(im, model.phowOpts{:}) ;
   end
 
   descrs = vl_colsubset(cat(2, descrs{:}), 10e4) ;
   descrs = single(descrs) ;
 
   % Quantize the descriptors to get the visual words
-  vocab = vl_kmeans(descrs, conf.numWords, 'verbose', 'algorithm', 'elkan', 'MaxNumIterations', 50) ;
-  save(conf.vocabPath, 'vocab') ;
+  vocab = vl_kmeans(descrs, model.numWords, 'verbose', 'algorithm', 'elkan', 'MaxNumIterations', 50) ;
+  save(conf.vocabFile, 'vocab') ;
 else
-  load(conf.vocabPath) ;
+  load(conf.vocabFile) ;
 end
 
 model.vocab = vocab ;
@@ -177,94 +86,119 @@ if strcmp(model.quantizer, 'kdtree')
   model.kdtree = vl_kdtreebuild(vocab) ;
 end
 
+disp('Vocabulary has been trained');
+
 % --------------------------------------------------------------------
 %                                           Compute spatial histograms
 % --------------------------------------------------------------------
 
-if ~exist(conf.histPath) || conf.clobber
+% NOT : Burada test mi train mi kullanilmasi gerektigini anlamadim
+% Simdilik train data referans aldim.
+if ~exist(conf.histFile) || conf.clobber 
   hists = {} ;
-  parfor ii = 1:length(images)
-  % for ii = 1:length(images)
-    fprintf('Processing %s (%.2f %%)\n', images{ii}, 100 * ii / length(images)) ;
-    im = imread(fullfile(conf.calDir, images{ii})) ;
-    hists{ii} = getImageDescriptor(model, im);
+  parfor i=1:length(trainingIds)
+    imageFilePath = fullfile(conf.trainDataPath, sprintf('%d.png', i));
+    im = imread(imageFilePath) ;
+    hists{i} = getImageDescriptor(model, im);
   end
 
   hists = cat(2, hists{:}) ;
-  save(conf.histPath, 'hists') ;
+  save(conf.histFile, 'hists') ;
 else
-  load(conf.histPath) ;
+  load(conf.histFile) ;
 end
 
+disp('Spatial histograms have been computed.');
 % --------------------------------------------------------------------
 %                                                  Compute feature map
 % --------------------------------------------------------------------
 
 psix = vl_homkermap(hists, 1, 'kchi2', 'gamma', .5) ;
 
+disp('Feature map has been computed');
+
 % --------------------------------------------------------------------
 %                                                            Train SVM
 % --------------------------------------------------------------------
 
-if ~exist(conf.modelPath) || conf.clobber
-  switch conf.svm.solver
+if ~exist(conf.modelFile) || conf.clobber
+  switch model.svm.solver
     case {'sgd', 'sdca'}
-      lambda = 1 / (conf.svm.C *  length(selTrain)) ;
+      lambda = 1 / (model.svm.C * length(trainingIds)) ;
       w = [] ;
-      parfor ci = 1:length(classes)
-        perm = randperm(length(selTrain)) ;
-        fprintf('Training model for class %s\n', classes{ci}) ;
-        y = 2 * (imageClass(selTrain) == ci) - 1 ;
-        [w(:,ci) b(ci) info] = vl_svmtrain(psix(:, selTrain(perm)), y(perm), lambda, ...
-          'Solver', conf.svm.solver, ...
+      for ci = 1:length(labels)
+      %parfor ci = 1:length(labels)
+        y = 2 * (trainingIds == ci) - 1 ;
+        [w(:,ci) b(ci) info] = vl_svmtrain(psix(:, trainingIds), y, lambda, ...
+          'Solver', model.svm.solver, ...
           'MaxNumIterations', 50/lambda, ...
-          'BiasMultiplier', conf.svm.biasMultiplier, ...
+          'BiasMultiplier', model.svm.biasMultiplier, ...
           'Epsilon', 1e-3);
       end
 
     case 'liblinear'
-      svm = train(imageClass(selTrain)', ...
-                  sparse(double(psix(:,selTrain))),  ...
+      svm = train(trainingIds', ...
+                  sparse(double(psix)),  ...
                   sprintf(' -s 3 -B %f -c %f', ...
-                          conf.svm.biasMultiplier, conf.svm.C), ...
+                          model.svm.biasMultiplier, model.svm.C), ...
                   'col') ;
       w = svm.w(:,1:end-1)' ;
       b =  svm.w(:,end)' ;
   end
 
-  model.b = conf.svm.biasMultiplier * b ;
+  model.b = model.svm.biasMultiplier * b ;
   model.w = w ;
 
-  save(conf.modelPath, 'model') ;
+  save(conf.modelFile, 'model') ;
 else
-  load(conf.modelPath) ;
+  load(conf.modelFile) ;
 end
+
+disp('SVM trained and model has been created');
+
+% --------------------------------------------------------------------
+%  classify test data and generate submittal file
+% --------------------------------------------------------------------
+time = clock;
+outputfile = sprintf('team_bruteforce_submittal_%d-%d-%d-%d%d.txt', ...
+                     time(1), time(2), time(3), time(4), time(5));
+testimages = dir(fullfile(conf.testDataPath,'*.png')); 
+fileID = fopen(outputfile,'wt');
+fprintf(fileID,'id,label\n');
+for i=1:length(testimages)
+   im = imread(fullfile(conf.testDataPath, testimages(i).name));
+   [classification, score] = classify(model, im);
+   fprintf(fileID,'%d,%s\n',i,classification{1});
+end
+fclose(fileID);
 
 % --------------------------------------------------------------------
 %                                                Test SVM and evaluate
 % --------------------------------------------------------------------
 
 % Estimate the class of the test images
-scores = model.w' * psix + model.b' * ones(1,size(psix,2)) ;
-[drop, imageEstClass] = max(scores, [], 1) ;
+
+% scores = model.w' * psix + model.b' * ones(1,size(psix,2)) ;
+% [drop, imageEstClass] = max(scores, [], 1) ;
 
 % Compute the confusion matrix
-idx = sub2ind([length(classes), length(classes)], ...
-              imageClass(selTest), imageEstClass(selTest)) ;
-confus = zeros(length(classes)) ;
-confus = vl_binsum(confus, ones(size(idx)), idx) ;
+
+% idx = sub2ind([length(trainingSetLabels), length(trainingSetLabels)], ...
+%               trainingIds, imageEstClass) ;
+% confus = zeros(length(trainingSetLabels)) ;
+% confus = vl_binsum(confus, ones(size(idx)), idx) ;
 
 % Plots
-figure(1) ; clf;
-subplot(1,2,1) ;
-imagesc(scores(:,[selTrain selTest])) ; title('Scores') ;
-set(gca, 'ytick', 1:length(classes), 'yticklabel', classes) ;
-subplot(1,2,2) ;
-imagesc(confus) ;
-title(sprintf('Confusion matrix (%.2f %% accuracy)', ...
-              100 * mean(diag(confus)/conf.numTest) )) ;
-print('-depsc2', [conf.resultPath '.ps']) ;
-save([conf.resultPath '.mat'], 'confus', 'conf') ;
+% figure(1) ; clf;
+% subplot(1,2,1) ;
+% imagesc(scores(:,[selTrain selTest])) ; title('Scores') ;
+% set(gca, 'ytick', 1:length(classes), 'yticklabel', classes) ;
+% subplot(1,2,2) ;
+% imagesc(confus) ;
+% title(sprintf('Confusion matrix (%.2f %% accuracy)', ...
+%               100 * mean(diag(confus)/conf.numTest) )) ;
+% print('-depsc2', [conf.resultPath '.ps']) ;
+% save([conf.resultPath '.mat'], 'confus', 'conf') ;
 
 % -------------------------------------------------------------------------
 function im = standarizeImage(im)
@@ -317,4 +251,4 @@ hist = getImageDescriptor(model, im) ;
 psix = vl_homkermap(hist, 1, 'kchi2', 'gamma', .5) ;
 scores = model.w' * psix + model.b' ;
 [score, best] = max(scores) ;
-className = model.classes{best} ;
+className = model.classes(best) ;

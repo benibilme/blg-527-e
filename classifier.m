@@ -5,11 +5,15 @@
 
 function classifier()
 
-  global conf trainingData model;
+  global conf model trainingData testIndices trainIndices ;
 
   conf.clobber         = true;
   conf.trainDataPath   = 'train';
   conf.testDataPath    = 'test';
+  
+  conf.trainDataSize   = 900;
+  conf.numOfFold       = 3;
+  
   conf.vocabFile       = 'vocab.mat';
   conf.histFile        = 'hists.mat';
   conf.modelFile       = 'model.mat';
@@ -17,18 +21,6 @@ function classifier()
   conf.dataFile        = 'trainingData.mat';
   conf.fmapFile        = 'fmap.mat';
   conf.cpFile          = 'cp.mat';
-
-  randn('state', 1) ;
-  rand('state', 1) ;
-  vl_twister('state', 1) ;
-
-  % --------------------------------------------------------------------
-  %  Setup trainingData
-  % --------------------------------------------------------------------
-
-  trainingData  =  importData('trainLabels.csv');
-  save(conf.dataFile, 'trainingData');
-  disp('trainingData setup is completed');
 
   % --------------------------------------------------------------------
   %  Setup up model parameters
@@ -48,62 +40,127 @@ function classifier()
   %model.svm.solver = 'liblinear' ;
   model.svm.biasMultiplier = 1 ;
 
-  if ~exist(conf.vocabFile) || conf.clobber
-    vocab = trainVocabulary;
-    disp('Vocabulary has been trained');
-  else
-    load(conf.vocabFile);
-    disp('Vocabulary has been loaded');
-  end
+  randn('state', 1) ;
+  rand('state', 1) ;
+  vl_twister('state', 1) ;
+  
+  disp('...BEGIN...')
 
-  model.vocab = vocab;
-  
-  if strcmp(model.quantizer, 'kdtree')
-    model.kdtree = vl_kdtreebuild(model.vocab) ;
-  end
-  
-  if ~exist(conf.histFile) || conf.clobber
-    hists = computeSpatialHistorams;
-    disp('Spatial histograms have been computed.');
-  else
-    load(conf.histFile);
-    disp('Spatial histograms have been loaded.');
-  end
- 
-  if ~exist(conf.histFile) || conf.clobber
-    psix  = computeFeatureMap(hists);
-    disp('Feature map has been computed');
-  else
-    load(conf.fmapFile);
-    disp('Feature map has been loaded');
-  end
+  % --------------------------------------------------------------------
+  %  Setup trainingData
+  % --------------------------------------------------------------------
 
-  if ~exist(conf.modelFile) || conf.clobber
-    trainSvm(psix);
-    disp('SVM trained and model has been created');
-  else 
-    load(conf.modelFile);
-    disp('SVM model has been loaded');
-  end
+  %% Read all available training data and save
+  data  =  importData('trainLabels.csv');
+  save(conf.dataFile, 'data');
+  disp('All available training data has been read');
   
-  classifications = classifyImages(conf.trainDataPath, trainingData.imageFileNames(10000:11000));
-  save(conf.classFile, 'classifications') ;
-  disp('Images have been classified');
+  %% Select randomly conf.trainDataSize of data 
+  selectedIndices = randperm(length(data.imageClasses),conf.trainDataSize);
+
+  %% Construct training data from subset of all available training data
+  trainingData.imageFileNames  = data.imageFileNames(selectedIndices);
+  trainingData.imageClasses    = data.imageClasses(selectedIndices);
+  trainingData.imageClassIds   = data.imageClassIds(selectedIndices);
+  trainingData.imageClassSet   = data.imageClassSet;
+  trainingData.imageClassSetId = data.imageClassSetId;
+  disp('Training data has been setup');
   
-  %% classifier performance
-  CP = classperf(trainingData.original.imageClasses, classifications)
-  save(conf.cpFile, 'CP');                       
-  disp('Classifier Performace has been calculated');
+  %% Perform Ten-Fold Cross Validation
+  indices = crossvalind('Kfold', trainingData.imageClasses, conf.numOfFold);
+
+  cp = classperf(trainingData.imageClasses);
   
-  %% create resultFile
+  for i=1:conf.numOfFold
+
+    fprintf('Iteration - %d\n', i);
+   
+    testIndices  = (indices == i);
+    trainIndices = ~testIndices;
+
+    if ~exist(conf.vocabFile) || conf.clobber
+      vocab = trainVocabulary;
+      disp('Vocabulary has been trained');
+    else
+      load(conf.vocabFile);
+      disp('Vocabulary has been loaded');
+    end
+
+    model.vocab = vocab;
+
+    if strcmp(model.quantizer, 'kdtree')
+      model.kdtree = vl_kdtreebuild(model.vocab) ;
+    end
+
+    if ~exist(conf.histFile) || conf.clobber
+      hists = computeSpatialHistorams;
+      disp('Spatial histograms have been computed.');
+    else
+      load(conf.histFile);
+      disp('Spatial histograms have been loaded.');
+    end
+
+    if ~exist(conf.histFile) || conf.clobber
+      psix  = computeFeatureMap(hists);
+      disp('Feature map has been computed');
+    else
+      load(conf.fmapFile);
+      disp('Feature map has been loaded');
+    end
+
+    if ~exist(conf.modelFile) || conf.clobber
+      trainSvm(psix);
+      disp('SVM trained and model has been created');
+    else
+      load(conf.modelFile);
+      disp('SVM model has been loaded');
+    end
+    
+    if (i > 1) 
+      wTotal = wTotal + model.w;
+      bTotal = bTotal + model.b;
+    else   
+      wTotal = model.w;
+      bTotal = model.b;
+    end
+
+    disp('Classifying test data')
+    classifications = classifyImages(conf.trainDataPath, ...
+                                     trainingData.imageFileNames(testIndices));
+    save(conf.classFile, 'classifications') ;
+    disp('Images have been classified');
+
+    %% Calculate Classifier Performance
+    disp('Classifier Performace for this iteration')
+    cp = classperf(trainingData.imageClasses(testIndices), classifications)
+    save(conf.cpFile, 'cp');
+
+  end %for
+
+  disp('Overall Classifier Performance')
+  cp
+  
+  % average w and d
+  model.w = wTotal ./ conf.numOfFold;
+  model.b = bTotal ./ conf.numOfFold;
+  save('finalModel.mat', 'model');
+  
+  disp('Classification of competition data begins...')
+  classifications = classifyImages(conf.testDataPath, ...
+                                   [1:300000]);
+  save('cifar10classes.mat', 'classifications');
+                                 
+  disp('Competition data result file is being created')
   createResultFile(classifications);
-  disp('Result file has been created');
+  
+  disp('...END...')
+
 end
 
 function vocab = trainVocabulary 
-  global conf trainingData model;
+  global conf model trainingData trainIndices ;
   descrs = {} ;
-  parfor i=1:length(trainingData.imageClasses)
+  parfor i=1:length(trainingData.imageClasses(trainIndices))
     imageFilePath = fullfile(conf.trainDataPath, sprintf('%d.png', i));
     im = imread(imageFilePath) ;
     im = standarizeImage(im) ;
@@ -112,14 +169,15 @@ function vocab = trainVocabulary
   descrs = vl_colsubset(cat(2, descrs{:}), 10e4) ;
   descrs = single(descrs) ;
   % Quantize the descriptors to get the visual words
-  vocab = vl_kmeans(descrs, model.numWords, 'verbose', 'algorithm', 'elkan', 'MaxNumIterations', 50) ;
+  %vocab = vl_kmeans(descrs, model.numWords, 'verbose', 'algorithm', 'elkan', 'MaxNumIterations', 50) ;
+  vocab = vl_kmeans(descrs, model.numWords, 'algorithm', 'elkan', 'MaxNumIterations', 50) ;
   save(conf.vocabFile, 'vocab') ;
 end
 
 function hists = computeSpatialHistorams
-  global conf trainingData model;
+  global conf model trainingData trainIndices;
   hists = {} ;
-  parfor i=1:length(trainingData.imageClasses)
+  parfor i=1:length(trainingData.imageClasses(trainIndices))
     imageFilePath = fullfile(conf.trainDataPath, sprintf('%d.png', i));
     im = imread(imageFilePath) ;
     hists{i} = getImageDescriptor(im);
@@ -135,22 +193,25 @@ function psix = computeFeatureMap(hists)
 end
 
 function trainSvm(psix)
-  global conf trainingData model;
+  global conf model trainingData trainIndices;
   switch model.svm.solver
     case {'sgd', 'sdca'}
-      lambda = 1 / (model.svm.C * length(trainingData.imageClasses)) ;
+      lambda = 1 / (model.svm.C * length(trainingData.imageClasses(trainIndices))) ;
       w = [] ;
       %for ci = 1:length(labels)
-      parfor ci = 1:length(trainingData.imageClasses)
-        y = 2 * (trainingData.imageClassIds == ci) - 1 ;
-        [w(:,ci) b(ci) info] = vl_svmtrain(psix(:, trainingData.imageClassIds), y, lambda, ...
-          'Solver', model.svm.solver, ...
-          'MaxNumIterations', 50/lambda, ...
-          'BiasMultiplier', model.svm.biasMultiplier, ...
-          'Epsilon', 1e-3);
+      parfor ci = 1:length(trainingData.imageClasses(trainIndices))
+        y = 2 * (trainingData.imageClassIds(trainIndices) == ci) - 1 ;
+        [w(:,ci) b(ci) info] = ...
+           vl_svmtrain(psix(:, trainingData.imageClassIds(trainIndices)), ...
+                       y, ...
+                       lambda, ...
+                       'Solver', model.svm.solver, ...
+                       'MaxNumIterations', 50/lambda, ...
+                       'BiasMultiplier', model.svm.biasMultiplier, ...
+                       'Epsilon', 1e-3);
       end
     case 'liblinear'
-      svm = train(trainingData.imageClassIds', ...
+      svm = train(trainingData.imageClassIds(trainIndices)', ...
                   sparse(double(psix)),  ...
                   sprintf(' -s 3 -B %f -c %f', ...
                   model.svm.biasMultiplier, model.svm.C), ...
@@ -185,9 +246,10 @@ function hist = getImageDescriptor(im)
     case 'vq'
       [drop, binsa] = min(vl_alldist(model.vocab, single(descrs)), [], 1) ;
     case 'kdtree'
-      binsa = double(vl_kdtreequery(model.kdtree, model.vocab, ...
-        single(descrs), ...
-        'MaxComparisons', 50)) ;
+      binsa = double(vl_kdtreequery(model.kdtree, ...
+                                    model.vocab,  ...
+                                    single(descrs), ...
+                                    'MaxComparisons', 50)) ;
   end
 
   for i = 1:length(model.numSpatialX)
@@ -270,17 +332,12 @@ function data  = importData(filename, startRow, endRow)
   %% Close the text file.
   fclose(fileID);
 
-  %% Save original image class order
-  data.original.imageClasses = dataArray(:,2)';
-  
-  %% sort data array first accoding to labels and then filename
-  dataArraySorted = sortrows([num2cell(dataArray{1}), dataArray{2}], [2 1]);
 
   %% names of the image files
-  data.imageFileNames   = cell2mat(dataArraySorted(:,1))';
+  data.imageFileNames   = dataArray{1};
 
   %% assigned class of the image file
-  data.imageClasses     = dataArraySorted(:, 2)';
+  data.imageClasses     = dataArray{2};
 
   %% image class set  (in cifar there are 10)
   data.imageClassSet    = unique(data.imageClasses);

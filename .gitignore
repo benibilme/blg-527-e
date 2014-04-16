@@ -1,1 +1,8 @@
 *.mat
+*~
+*.tar
+*.gz
+data
+test
+train
+\.*

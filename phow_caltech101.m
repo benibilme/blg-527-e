@@ -69,7 +69,7 @@ conf.svm.solver = 'sdca' ;
 
 conf.svm.biasMultiplier = 1 ;
 conf.phowOpts = {'Step', 3} ;
-conf.clobber = false ;
+conf.clobber = true ;
 conf.tinyProblem = true ;
 conf.prefix = 'baseline' ;
 conf.randSeed = 1 ;
@@ -154,8 +154,8 @@ if ~exist(conf.vocabPath) || conf.clobber
   % Get some PHOW descriptors to train the dictionary
   selTrainFeats = vl_colsubset(selTrain, 30) ;
   descrs = {} ;
-  %for ii = 1:length(selTrainFeats)
-  parfor ii = 1:length(selTrainFeats)
+  for ii = 1:length(selTrainFeats)
+  %parfor ii = 1:length(selTrainFeats)
     im = imread(fullfile(conf.calDir, images{selTrainFeats(ii)})) ;
     im = standarizeImage(im) ;
     [drop, descrs{ii}] = vl_phow(im, model.phowOpts{:}) ;
@@ -206,12 +206,13 @@ psix = vl_homkermap(hists, 1, 'kchi2', 'gamma', .5) ;
 %                                                            Train SVM
 % --------------------------------------------------------------------
 
-if ~exist(conf.modelPath) || conf.clobber
+%if ~exist(conf.modelPath) || conf.clobber
   switch conf.svm.solver
     case {'sgd', 'sdca'}
       lambda = 1 / (conf.svm.C *  length(selTrain)) ;
       w = [] ;
-      parfor ci = 1:length(classes)
+      for ci = 1:length(classes)
+      %parfor ci = 1:length(classes)
         perm = randperm(length(selTrain)) ;
         fprintf('Training model for class %s\n', classes{ci}) ;
         y = 2 * (imageClass(selTrain) == ci) - 1 ;
@@ -236,9 +237,9 @@ if ~exist(conf.modelPath) || conf.clobber
   model.w = w ;
 
   save(conf.modelPath, 'model') ;
-else
-  load(conf.modelPath) ;
-end
+%else
+%  load(conf.modelPath) ;
+%end
 
 % --------------------------------------------------------------------
 %                                                Test SVM and evaluate

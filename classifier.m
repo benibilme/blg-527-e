@@ -1,8 +1,3 @@
-% YAPILACAKLAR
-% TEN FOLD CROSSVALIDATION GORE KOD DUZENELENECEK
-% CLASSIFIER PERFORMANCE PARAMETRELERI CIKARILACAK ROUTINE TAMAMLANACAK
-% 
-
 function classifier()
 
   global conf model trainingData testIndices trainIndices ;
@@ -11,8 +6,8 @@ function classifier()
   conf.trainDataPath   = 'train';
   conf.testDataPath    = 'test';
   
-  conf.trainDataSize   = 900;
-  conf.numOfFold       = 3;
+  conf.trainDataSize   = 10000;
+  conf.numOfFold       = 10;
   
   conf.vocabFile       = 'vocab.mat';
   conf.histFile        = 'hists.mat';
@@ -27,7 +22,7 @@ function classifier()
   % --------------------------------------------------------------------
 
   model.numWords = 600;
-  model.phowOpts = {'Step', 3};
+  model.phowOpts = {'Step', 2};
   model.numSpatialX = [2 4];
   model.numSpatialY = [2 4];
   model.quantizer = 'kdtree';
@@ -35,9 +30,9 @@ function classifier()
   model.w = [] ;
   model.b = [] ;
   model.svm.C = 10 ;
-  model.svm.solver = 'sdca' ;
+  %model.svm.solver = 'sdca' ;
   %model.svm.solver = 'sgd' ;
-  %model.svm.solver = 'liblinear' ;
+  model.svm.solver = 'liblinear' ;
   model.svm.biasMultiplier = 1 ;
 
   randn('state', 1) ;
@@ -217,7 +212,7 @@ function trainSvm(psix)
                   model.svm.biasMultiplier, model.svm.C), ...
                   'col') ;
       w = svm.w(:,1:end-1)' ;
-      b =  svm.w(:,end)' ;
+      b = svm.w(:,end)' ;
   end
   model.b = model.svm.biasMultiplier * b ;
   model.w = w ;
@@ -293,7 +288,7 @@ function createResultFile(classifications)
   fileID = fopen(outputfile,'wt');
   fprintf(fileID,'id,label\n');
   for i=1:length(classifications)
-    fprintf(fileID,'%d,%s\n\r',i,classifications{i});
+    fprintf(fileID,'%d,%s\n',i,classifications{i});
   end
   fclose(fileID);
 end

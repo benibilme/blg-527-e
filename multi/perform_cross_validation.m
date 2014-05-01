@@ -1,4 +1,4 @@
-function model = perform_cross_validation(data)
+function model = perform_cross_validation(data, trainDataSize, numOfFold)
   
   global settings;
 
@@ -8,18 +8,18 @@ function model = perform_cross_validation(data)
   model    = get_initial_model();
  
   selectedIndices = randperm(length(data.imageClasses), ... 
-                             model.dataSize);
+                             trainDataSize);
 
   selectedData = get_subset_data(data, selectedIndices);
 
   %Perform Ten-Fold Cross Validation
   indices = crossvalind('Kfold', ...
                         selectedData.imageClasses, ...
-                        model.numOfFold);
+                        numOfFold);
   
   cp = classperf(selectedData.imageClasses);
   
-  for i=1:model.numOfFold
+  for i=1:numOfFold
     
     testIndices  = (indices == i);
     trainIndices = ~testIndices;
@@ -51,8 +51,8 @@ function model = perform_cross_validation(data)
   cp
   
   % average w and d
-  model.w = wTotal ./ model.numOfFold;
-  model.b = bTotal ./ model.numOfFold;
+  model.w = wTotal ./ numOfFold;
+  model.b = bTotal ./ numOfFold;
   save('modelFinal.mat', 'model');
   
   disp('...Cross Validation Ends...')

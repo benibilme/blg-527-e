@@ -62,7 +62,7 @@ function classifier()
   disp('Training data has been setup');
   
   %% Perform Ten-Fold Cross Validation
-  indices = crossvalind('Kfold', trainingData.imageClasses, conf.numOfFold);
+  indices = crossvalind('Kfold', subsetData.imageClasses, numOfFold);
 
   cp = classperf(trainingData.imageClasses);
   

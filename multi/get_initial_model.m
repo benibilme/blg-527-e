@@ -1,4 +1,6 @@
-function get_model()
+function model = get_initial_model()
+  model.dataSize  = 1000;
+  model.numOfFold = 5;
   model.numWords = 600;
   model.phowOpts = {'Step', 2};
   model.numSpatialX = [2 4];

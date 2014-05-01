@@ -1,14 +1,15 @@
-function svm = train_svm(solver, classids, psix)
-  global conf model;
+function model = train_svm(model, data, psix)
+ 
+  global settings;
   switch model.svm.solver
     case {'sgd', 'sdca'}
-      lambda = 1 / (model.svm.C * length(trainingData.imageClasses(trainIndices))) ;
+      lambda = 1 / (model.svm.C * length(data.imageClasses)) ;
       w = [] ;
       %for ci = 1:length(labels)
-      parfor ci = 1:length(trainingData.imageClasses(trainIndices))
-        y = 2 * (trainingData.imageClassIds(trainIndices) == ci) - 1 ;
+      parfor ci = 1:length(data.imageClasses)
+        y = 2 * (data.imageClassIds == ci) - 1 ;
         [w(:,ci) b(ci) info] = ...
-           vl_svmtrain(psix(:, trainingData.imageClassIds(trainIndices)), ...
+           vl_svmtrain(psix(:, data.imageClassIds), ...
                        y, ...
                        lambda, ...
                        'Solver', model.svm.solver, ...
@@ -17,7 +18,7 @@ function svm = train_svm(solver, classids, psix)
                        'Epsilon', 1e-3);
       end
     case 'liblinear'
-      svm = train(trainingData.imageClassIds(trainIndices)', ...
+      svm = train(data.imageClassIds', ...
                   sparse(double(psix)),  ...
                   sprintf(' -s 3 -B %f -c %f', ...
                   model.svm.biasMultiplier, model.svm.C), ...
@@ -27,5 +28,6 @@ function svm = train_svm(solver, classids, psix)
   end
   model.b = model.svm.biasMultiplier * b ;
   model.w = w ;
-  save(conf.modelFile, 'model') ;
+  save(settings.file.model, 'model') ;
+  disp('SVM trained and model has been created');
 end

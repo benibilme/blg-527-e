@@ -34,10 +34,10 @@ function data  = import_training_data(filename, startRow, endRow)
 
 
   % names of the image files
-  data.imageFileNames   = dataArray{1};
+  data.imageFileNames   = dataArray{1}';
 
   % assigned class of the image file
-  data.imageClasses     = dataArray{2};
+  data.imageClasses     = dataArray{2}';
 
   % image class set  (in cifar there are 10)
   data.imageClassSet    = unique(data.imageClasses);
@@ -57,4 +57,7 @@ function data  = import_training_data(filename, startRow, endRow)
       end
     end
   end
+  
+  save('trainingData.mat', 'data');
+  disp('All available training data has been read');
 end

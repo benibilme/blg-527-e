@@ -1,5 +1,6 @@
 function hist = get_image_descriptor(model, im)
-  im = standarizeImage(im) ;
+  
+  im = get_standart_image(im) ;
   width = size(im,2) ;
   height = size(im,1) ;
   numWords = size(model.vocab, 2) ;

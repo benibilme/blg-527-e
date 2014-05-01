@@ -1,4 +1,4 @@
-function im = get_standart_image(path)
+function im = get_standart_image(im)
   im = im2single(im) ;
   if size(im,1) > 480
     im = imresize(im, [480 NaN]) ;

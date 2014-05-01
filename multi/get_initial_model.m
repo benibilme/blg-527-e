@@ -1,11 +1,11 @@
 function model = get_initial_model()
-  model.dataSize  = 1000;
-  model.numOfFold = 5;
+  model.dataSize  = 900;
+  model.numOfFold = 3;
   model.numWords = 600;
-  model.phowOpts = {'Step', 2};
+  model.phowOpts = {'Step', 3};
   model.numSpatialX = [2 4];
   model.numSpatialY = [2 4];
-  model.quantizer = 'kdtree';
+  model.quantizer = 'vq';
   model.vocab = [] ;
   model.w = [] ;
   model.b = [] ;

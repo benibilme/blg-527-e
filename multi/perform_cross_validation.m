@@ -38,11 +38,12 @@ function model = perform_cross_validation(data)
     end
     
     disp('Classifying test data')
-    classifications = classifyImages(settings.train.dataPath, ...
-                                     testData.imageFileNames);
+    classifications = classify_images(model, ...
+                                      testData, ...
+                                      settings.train.dataPath);
     % Calculate Classifier Performance
     disp('Classifier Performace for this iteration')
-    cp = classperf(testData.imageClasses(testIndices), classifications)
+    cp = classperf(testData.imageClasses, classifications)
     save('cp.mat', 'cp');
   end
   

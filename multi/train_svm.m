@@ -26,8 +26,8 @@ function model = train_svm(model, data, psix)
       w = svm.w(:,1:end-1)' ;
       b = svm.w(:,end)' ;
   end
-  model.b = model.svm.biasMultiplier * b ;
-  model.w = w ;
+  model.b = model.svm.biasMultiplier * b;
+  model.w = w;
   save(settings.file.model, 'model') ;
   disp('SVM trained and model has been created');
 end

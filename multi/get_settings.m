@@ -3,7 +3,7 @@ function settings = get_settings()
 
   settings.test.dataPath   = '../test';
   
-  settings.train.file      = 'trainLabels.csv';
+  settings.train.file      = '../trainLabels.csv';
   settings.train.dataPath  = '../train';
 
   settings.file.vocab       = 'vocab.mat';
